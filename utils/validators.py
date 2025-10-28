@@ -21,10 +21,6 @@ class SQLValidator:
         sql_stripped = sql.strip()
         sql_upper = sql_stripped.upper()
         
-        # Must start with SELECT
-        if not sql_upper.startswith('SELECT'):
-            return False, "Only SELECT queries are allowed"
-        
         # Check for dangerous keywords
         for keyword in SQLValidator.DANGEROUS_KEYWORDS:
             if keyword in sql_upper:
