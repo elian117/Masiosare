@@ -53,27 +53,36 @@ class TextToSQLAgent:
         1. FIRST, call get_database_schema() to see the database structure
         2. Analyze the schema to understand available tables and columns
         3. Generate a SQL query by calling generate_sql_query() with the question and schema
-        4. Generate and immediately execute the SQL query by calling execute_sql_query() using the SQL returned by generate_sql_query()
-        5. Do not ask for confirmation — always execute SELECT queries automatically
-        6. Present the results in a clear, well-formatted way
-        7. Provide insights or answer follow-up questions about the data
+        4. Generate and immediately execute the SQL query by calling execute_sql_query()
+        5. Do not ask for confirmation — always execute queries automatically
+        6. Present a brief summary of the results
 
-        Important guidelines:
-        - ALWAYS call get_database_schema() first, even if you think you know the schema
+        IMPORTANT: 
+        - When query results have MORE than 10 rows, give a BRIEF summary only (2-3 sentences)
+        - DO NOT list individual rows or try to format large tables in your response
+        - The full table will be displayed automatically in the interface
+        - Focus on insights: totals, ranges, patterns, or key findings
+        - For large datasets, say something like: "The query returned X rows showing..."
+
+        For small results (10 rows or less):
+        - You can show the full data in markdown table format
+        - Provide detailed explanation
+
+        Guidelines:
+        - ALWAYS call get_database_schema() first
         - Show the SQL query before executing it
-        - Explain queries in simple, non-technical language
-        - Format results as tables when appropriate
-        - Only use SELECT statements (no INSERT, UPDATE, DELETE, etc.)
+        - Explain queries in simple language
+        - Do NOT use ['DROP', 'DELETE', 'UPDATE', 'INSERT', 'ALTER', 'CREATE', 'TRUNCATE', 'GRANT', 'REVOKE', 'EXEC', 'EXECUTE', 'PRAGMA']
         - If there's an error, explain it clearly and suggest how to fix it
         - Be conversational, helpful, and patient
 
-        Example workflow:
-        User: "How many products do we have?"
-        1. Call get_database_schema()
-        2. Generate SQL: SELECT COUNT(*) FROM products
-        3. Show and explain the query
-        4. Execute it
-        5. Present the result: "There are 14 products in the database"
+        Example for large dataset:
+        User: "Show all airports"
+        Response: "I've retrieved all 665 airports from the database. The results include airport codes, names, cities, and coordinates. You can see the complete list in the table below."
+
+        Example for small dataset:
+        User: "Show top 3 airports"
+        Response: "Here are the top 3 airports: [show table]"
         """
         
         agent = self.chat_client.create_agent(
@@ -82,24 +91,43 @@ class TextToSQLAgent:
                 self.tools.get_database_schema,
                 self.tools.generate_sql_query,
                 self.tools.execute_sql_query,
-                self.tools.show_last_dataframe,
             ]
         )
         
         return agent
     
-    async def chat(self, message: str) -> str:
+    async def chat(self, message: str) -> dict:
         """
-        Process user message and return agent response
+        Process user message and return agent response with data
         
         Args:
             message: User's natural language question
             
         Returns:
-            Agent's response text
+            Dict with 'text' (agent response) and 'data' (DataFrame if available)
         """
         try:
             result = await self.agent.run(message)
-            return result.text
+            
+            # Check if we have DataFrame results to include
+            response_data = {
+                'text': result.text,
+                'dataframe': None,
+                'query': None
+            }
+            
+            # If there's a last DataFrame from the query, include it
+            if self.tools.last_df is not None and len(self.tools.last_df) > 0:
+                # Convert DataFrame to list of dicts for JSON serialization
+                response_data['dataframe'] = self.tools.last_df.to_dict('records')
+                response_data['columns'] = list(self.tools.last_df.columns)
+                response_data['query'] = self.tools.last_query
+            
+            return response_data
+            
         except Exception as e:
-            return f"❌ Error: {str(e)}\n\nPlease check your Azure OpenAI configuration and try again."
+            return {
+                'text': f"❌ Error: {str(e)}\n\nPlease check your Azure OpenAI configuration and try again.",
+                'dataframe': None,
+                'query': None
+            }
