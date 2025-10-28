@@ -1,4 +1,4 @@
-const API_BASE = '';
+/* Add at the end of styles.css or create a new style block */const API_BASE = '';
 
 // Auto-resize textarea
 document.getElementById('messageInput').addEventListener('input', function() {
@@ -58,8 +58,8 @@ async function sendMessage() {
         // Remove loading
         removeLoadingMessage(loadingId);
         
-        // Add assistant message
-        addMessage('assistant', data.response);
+        // Add assistant message with data table if available
+        addMessage('assistant', data.response, data.dataframe, data.columns, data.query);
         
     } catch (error) {
         removeLoadingMessage(loadingId);
@@ -77,27 +77,57 @@ function sendExample(text) {
 }
 
 // Add message to chat
-function addMessage(role, content) {
+function addMessage(role, content, dataframe = null, columns = null, query = null) {
     const container = document.getElementById('chatContainer');
     const messageDiv = document.createElement('div');
     messageDiv.className = `message ${role}`;
     
     const avatar = role === 'user' ? '👤' : '🤖';
     
-    messageDiv.innerHTML = `
+    let messageContent = `
         <div class="message-avatar">${avatar}</div>
-        <div class="message-content">${formatContent(content)}</div>
+        <div class="message-content">
+            ${formatContent(content)}
     `;
+    
+    // If there's a dataframe, add it as a table
+    if (dataframe && dataframe.length > 0 && columns) {
+        messageContent += `
+            <div class="data-table-container">
+                <div class="table-info">📊 <strong>${dataframe.length} rows</strong> returned</div>
+                <div class="table-wrapper">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                ${columns.map(col => `<th>${col}</th>`).join('')}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${dataframe.map(row => `
+                                <tr>
+                                    ${columns.map(col => `<td>${row[col] !== null ? row[col] : '<span style="color: #94a3b8;">null</span>'}</td>`).join('')}
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        `;
+    }
+    
+    messageContent += `</div>`;
+    messageDiv.innerHTML = messageContent;
     
     container.appendChild(messageDiv);
     container.scrollTop = container.scrollHeight;
 }
 
-// Format message content (CORRECTED - uses outputs/ directory)
+// Format message content
 function formatContent(content) {
+    
     // Convert markdown code blocks to HTML
-    content = content.replace(/```sql\n([\s\S]*?)```/g, '<pre><code>$1</code></pre>');
-    content = content.replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>');
+    content = content.replace(/```sql\n([\s\S]*?)```/g, '');
+    content = content.replace(/```([\s\S]*?)```/g, '');
     
     // Convert markdown tables to HTML
     if (content.includes('|')) {
@@ -250,14 +280,14 @@ async function clearHistory() {
                 </ul>
                 <div class="example-queries">
                     <p><strong>Try asking:</strong></p>
-                    <button class="example-btn" onclick="sendExample('How many products are in each category?')">
-                        How many products are in each category?
+                    <button class="example-btn" onclick="sendExample('How many bookings do we have?')">
+                        How many bookings do we have?
                     </button>
-                    <button class="example-btn" onclick="sendExample('Show top 5 customers by total spending and create a bar chart')">
-                        Show top 5 customers by total spending and create a bar chart
+                    <button class="example-btn" onclick="sendExample('Show top 5 airports by number of flights with a bar chart')">
+                        Show top 5 airports by number of flights with a bar chart
                     </button>
-                    <button class="example-btn" onclick="sendExample('Create a pie chart of order statuses')">
-                        Create a pie chart of order statuses
+                    <button class="example-btn" onclick="sendExample('Create a pie chart of flight statuses')">
+                        Create a pie chart of flight statuses
                     </button>
                 </div>
             </div>
@@ -267,20 +297,6 @@ async function clearHistory() {
         console.error('Error:', error);
     }
 }
-
-// Close modal when clicking outside
-document.getElementById('vizModal').addEventListener('click', function(e) {
-    if (e.target === this) {
-        closeModal();
-    }
-});
-
-// Close modal with Escape key
-document.addEventListener('keydown', function(e) {
-    if (e.key === 'Escape') {
-        closeModal();
-    }
-});
 
 // Load chat history on page load
 async function loadHistory() {
@@ -295,7 +311,7 @@ async function loadHistory() {
             }
             
             history.forEach(msg => {
-                addMessage(msg.role, msg.content);
+                addMessage(msg.role, msg.content, msg.dataframe, msg.columns, msg.query);
             });
         }
     } catch (error) {
