@@ -118,10 +118,3 @@ WHERE ...
         except Exception as e:
             return f"❌ Error executing query: {str(e)}"
     
-    def show_last_dataframe(self) -> str:
-        """Show the last query results as a formatted table"""
-        if not self.last_df is not None:
-            return "No previous DataFrame available. Please run a query first."
-        
-        df = self.last_df
-        return f"Here are the latest query results:\n\n{df.to_markdown(index=False)}"
