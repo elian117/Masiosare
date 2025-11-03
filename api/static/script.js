@@ -1,5 +1,8 @@
 const API_BASE = '';
 
+// Session management
+let currentSessionId = localStorage.getItem('currentSessionId') || null;
+
 // Auto-resize textarea
 document.getElementById('messageInput').addEventListener('input', function() {
     this.style.height = 'auto';
@@ -14,12 +17,32 @@ function handleKeyPress(event) {
     }
 }
 
+// Initialize or create new session
+async function initializeSession() {
+    if (!currentSessionId) {
+        try {
+            const response = await fetch(`${API_BASE}/api/sessions/new`, {
+                method: 'POST'
+            });
+            const data = await response.json();
+            currentSessionId = data.session_id;
+            localStorage.setItem('currentSessionId', currentSessionId);
+            console.log('New session created:', currentSessionId);
+        } catch (error) {
+            console.error('Failed to create session:', error);
+        }
+    }
+}
+
 // Send message
 async function sendMessage() {
     const input = document.getElementById('messageInput');
     const message = input.value.trim();
     
     if (!message) return;
+    
+    // Ensure we have a session
+    await initializeSession();
     
     // Clear input
     input.value = '';
@@ -46,7 +69,10 @@ async function sendMessage() {
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({ message })
+            body: JSON.stringify({ 
+                message,
+                session_id: currentSessionId 
+            })
         });
         
         if (!response.ok) {
@@ -55,11 +81,17 @@ async function sendMessage() {
         
         const data = await response.json();
         
+        // Update session ID if it changed
+        if (data.session_id && data.session_id !== currentSessionId) {
+            currentSessionId = data.session_id;
+            localStorage.setItem('currentSessionId', currentSessionId);
+        }
+        
         // Remove loading
         removeLoadingMessage(loadingId);
         
-        // Add assistant message
-        addMessage('assistant', data.response);
+        // Add assistant message with data table and fuzzy matches if available
+        addMessage('assistant', data.response, data.dataframe, data.columns, data.query, data.fuzzy_matches);
         
     } catch (error) {
         removeLoadingMessage(loadingId);
@@ -77,27 +109,57 @@ function sendExample(text) {
 }
 
 // Add message to chat
-function addMessage(role, content) {
+function addMessage(role, content, dataframe = null, columns = null, query = null) {
     const container = document.getElementById('chatContainer');
     const messageDiv = document.createElement('div');
     messageDiv.className = `message ${role}`;
     
     const avatar = role === 'user' ? '👤' : '🤖';
     
-    messageDiv.innerHTML = `
+    let messageContent = `
         <div class="message-avatar">${avatar}</div>
-        <div class="message-content">${formatContent(content)}</div>
+        <div class="message-content">
+            ${formatContent(content)}
     `;
+    
+    // If there's a dataframe, add it as a table
+    if (dataframe && dataframe.length > 0 && columns) {
+        messageContent += `
+            <div class="data-table-container">
+                <div class="table-info">📊 <strong>${dataframe.length} rows</strong> returned</div>
+                <div class="table-wrapper">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                ${columns.map(col => `<th>${col}</th>`).join('')}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${dataframe.map(row => `
+                                <tr>
+                                    ${columns.map(col => `<td>${row[col] !== null ? row[col] : '<span style="color: #94a3b8;">null</span>'}</td>`).join('')}
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        `;
+    }
+    
+    messageContent += `</div>`;
+    messageDiv.innerHTML = messageContent;
     
     container.appendChild(messageDiv);
     container.scrollTop = container.scrollHeight;
 }
 
-// Format message content (CORRECTED - uses outputs/ directory)
+// Format message content
 function formatContent(content) {
+    
     // Convert markdown code blocks to HTML
-    content = content.replace(/```sql\n([\s\S]*?)```/g, '<pre><code>$1</code></pre>');
-    content = content.replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>');
+    content = content.replace(/```sql\n([\s\S]*?)```/g, '');
+    content = content.replace(/```([\s\S]*?)```/g, '');
     
     // Convert markdown tables to HTML
     if (content.includes('|')) {
@@ -225,14 +287,18 @@ function setSendButtonState(disabled) {
     }
 }
 
-// Clear chat history
+// Clear chat history for current session
 async function clearHistory() {
-    if (!confirm('Are you sure you want to clear the chat history?')) {
+    if (!confirm('Are you sure you want to clear the chat history for this session?')) {
         return;
     }
     
     try {
-        await fetch(`${API_BASE}/api/history`, {
+        const url = currentSessionId 
+            ? `${API_BASE}/api/history?session_id=${currentSessionId}`
+            : `${API_BASE}/api/history`;
+            
+        await fetch(url, {
             method: 'DELETE'
         });
         
@@ -242,22 +308,20 @@ async function clearHistory() {
             <div class="welcome-message">
                 <div class="welcome-icon">👋</div>
                 <h2>Welcome to MASIOSARE!</h2>
-                <p>Ask me anything about the database. I can:</p>
-                <ul>
-                    <li>Execute SQL queries from natural language</li>
-                    <li>Show results in beautiful tables</li>
-                    <li>Create visualizations and charts</li>
-                </ul>
+                <p>Ask me anything about the database. I'll remember our conversation!</p>
+                <div class="session-info">
+                    <p>💡 <strong>Memory Enabled:</strong> I can reference previous queries and maintain context across the conversation.</p>
+                </div>
                 <div class="example-queries">
                     <p><strong>Try asking:</strong></p>
                     <button class="example-btn" onclick="sendExample('How many products are in each category?')">
                         How many products are in each category?
                     </button>
-                    <button class="example-btn" onclick="sendExample('Show top 5 customers by total spending and create a bar chart')">
-                        Show top 5 customers by total spending and create a bar chart
+                    <button class="example-btn" onclick="sendExample('Show me the details of the top category')">
+                        Show me the details of the top category
                     </button>
-                    <button class="example-btn" onclick="sendExample('Create a pie chart of order statuses')">
-                        Create a pie chart of order statuses
+                    <button class="example-btn" onclick="sendExample('How many were there in the previous query?')">
+                        How many were there in the previous query?
                     </button>
                 </div>
             </div>
@@ -268,24 +332,53 @@ async function clearHistory() {
     }
 }
 
-// Close modal when clicking outside
-document.getElementById('vizModal').addEventListener('click', function(e) {
-    if (e.target === this) {
-        closeModal();
+// Start new conversation session
+async function startNewSession() {
+    if (!confirm('Start a new conversation? Current session will be saved.')) {
+        return;
     }
-});
-
-// Close modal with Escape key
-document.addEventListener('keydown', function(e) {
-    if (e.key === 'Escape') {
-        closeModal();
+    
+    try {
+        const response = await fetch(`${API_BASE}/api/sessions/new`, {
+            method: 'POST'
+        });
+        const data = await response.json();
+        currentSessionId = data.session_id;
+        localStorage.setItem('currentSessionId', currentSessionId);
+        
+        // Clear UI
+        const container = document.getElementById('chatContainer');
+        container.innerHTML = `
+            <div class="welcome-message">
+                <div class="welcome-icon">🆕</div>
+                <h2>New Conversation Started!</h2>
+                <p>Session ID: ${currentSessionId.substring(0, 8)}...</p>
+                <div class="example-queries">
+                    <p><strong>Try asking:</strong></p>
+                    <button class="example-btn" onclick="sendExample('How many products are in each category?')">
+                        How many products are in each category?
+                    </button>
+                </div>
+            </div>
+        `;
+        
+        console.log('New session started:', currentSessionId);
+    } catch (error) {
+        alert('Failed to start new session');
+        console.error('Error:', error);
     }
-});
+}
 
 // Load chat history on page load
 async function loadHistory() {
+    await initializeSession();
+    
     try {
-        const response = await fetch(`${API_BASE}/api/history`);
+        const url = currentSessionId 
+            ? `${API_BASE}/api/history?session_id=${currentSessionId}`
+            : `${API_BASE}/api/history`;
+            
+        const response = await fetch(url);
         const history = await response.json();
         
         if (history.length > 0) {
@@ -295,8 +388,10 @@ async function loadHistory() {
             }
             
             history.forEach(msg => {
-                addMessage(msg.role, msg.content);
+                addMessage(msg.role, msg.content, msg.dataframe, msg.columns, msg.query);
             });
+            
+            console.log('Loaded conversation history with', history.length, 'messages');
         }
     } catch (error) {
         console.error('Failed to load history:', error);
@@ -307,6 +402,11 @@ async function loadHistory() {
 window.addEventListener('load', function() {
     document.getElementById('messageInput').focus();
     loadHistory();
+    
+    // Display session info
+    if (currentSessionId) {
+        console.log('Current session:', currentSessionId);
+    }
 });
 
-console.log('Text-to-SQL Agent Chat Interface loaded successfully! 🚀');
+console.log('Text-to-SQL Agent Chat Interface with Memory loaded successfully! 🚀');

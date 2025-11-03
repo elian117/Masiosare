@@ -1,8 +1,3 @@
-# ============================================================================
-# FILE 1: run_api.py
-# Script to run the FastAPI application
-# ============================================================================
-
 """
 Run the FastAPI application
 Usage: python run_api.py
@@ -15,18 +10,19 @@ import os
 # Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+from config.settings import settings
+
 if __name__ == "__main__":
     print("\n" + "=" * 70)
-    print("Starting Text-to-SQL Agent Web Interface")
+    print("Masiosare AI Layer 2 - Azure SQL Database Edition")
     print("=" * 70)
-    print("\nServer will start at: http://localhost:8003")
+    print(f"\nServer will start at: http://{settings.API_HOST}:{settings.API_PORT}")
     print("Press CTRL+C to stop\n")
     
     uvicorn.run(
         "api.main:app",
-        host="localhost",
-        port=8003,
+        host=settings.API_HOST,
+        port=settings.API_PORT,
         reload=True,
         log_level="info"
     )
-
