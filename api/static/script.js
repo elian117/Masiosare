@@ -114,7 +114,7 @@ function addMessage(role, content, dataframe = null, columns = null, query = nul
     const messageDiv = document.createElement('div');
     messageDiv.className = `message ${role}`;
     
-    const avatar = role === 'user' ? '👤' : '🤖';
+    const avatar = role === 'user' ? '<i class="fas fa-user"></i>' : '<i class="fas fa-robot"></i>';
     
     let messageContent = `
         <div class="message-avatar">${avatar}</div>
@@ -126,7 +126,7 @@ function addMessage(role, content, dataframe = null, columns = null, query = nul
     if (dataframe && dataframe.length > 0 && columns) {
         messageContent += `
             <div class="data-table-container">
-                <div class="table-info">📊 <strong>${dataframe.length} rows</strong> returned</div>
+                <div class="table-info"><strong>${dataframe.length} Filas</strong></div>
                 <div class="table-wrapper">
                     <table class="data-table">
                         <thead>
@@ -226,7 +226,7 @@ function formatContent(content) {
     content = content.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
     
     // Convert inline code with backticks
-    content = content.replace(/`([^`]+)`/g, '<code style="background: #f1f5f9; padding: 2px 6px; border-radius: 4px; font-family: monospace;">$1</code>');
+    content = content.replace(/`([^`]+)`/g, '<code style="background: #333333ff; padding: 2px 6px; border-radius: 4px; font-family: monospace;">$1</code>');
     
     // Convert checkmarks
     content = content.replace(/✓/g, '<span style="color: #10b981;">✓</span>');
@@ -246,7 +246,7 @@ function addLoadingMessage() {
     loadingDiv.className = 'message assistant';
     
     loadingDiv.innerHTML = `
-        <div class="message-avatar">🤖</div>
+        <div class="message-avatar"><i class="fas fa-robot"></i></div>
         <div class="message-content">
             <div class="loading">
                 <div class="loading-dot"></div>
@@ -270,7 +270,7 @@ function removeLoadingMessage(loadingId) {
     }
 }
 
-// Set send button state
+// Configurar el estado del botón de envío
 function setSendButtonState(disabled) {
     const button = document.getElementById('sendButton');
     const icon = document.getElementById('sendIcon');
@@ -279,17 +279,17 @@ function setSendButtonState(disabled) {
     button.disabled = disabled;
     
     if (disabled) {
-        icon.textContent = '⏳';
-        text.textContent = 'Thinking...';
+        icon.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i>';
+        text.textContent = 'Pensando...';
     } else {
-        icon.textContent = '📤';
-        text.textContent = 'Send';
+        icon.innerHTML = '<i class="fas fa-paper-plane">';
+        text.textContent = 'Enviar';
     }
 }
 
-// Clear chat history for current session
+// Borrar el historial del chat de la sesión actual
 async function clearHistory() {
-    if (!confirm('Are you sure you want to clear the chat history for this session?')) {
+    if (!confirm('¿Estás seguro de que quieres borrar el historial del chat de esta sesión?')) {
         return;
     }
     
@@ -302,32 +302,31 @@ async function clearHistory() {
             method: 'DELETE'
         });
         
-        // Clear UI
+        // Limpiar la interfaz
         const container = document.getElementById('chatContainer');
         container.innerHTML = `
             <div class="welcome-message">
-                <div class="welcome-icon">👋</div>
-                <h2>Welcome to MASIOSARE!</h2>
-                <p>Ask me anything about the database. I'll remember our conversation!</p>
+                <div class="welcome-icon"></div>
+                <h2>¡Bienvenido a MASIOSARE!</h2>
+                <p>Pregúntame lo que quieras sobre la base de datos. ¡Recordaré nuestra conversación!</p>
+                <!--
                 <div class="session-info">
-                    <p>💡 <strong>Memory Enabled:</strong> I can reference previous queries and maintain context across the conversation.</p>
+                    <p>💡 <strong>Memoria activada:</strong> puedo hacer referencia a consultas previas y mantener el contexto durante la conversación.</p>
                 </div>
+                -->
                 <div class="example-queries">
-                    <p><strong>Try asking:</strong></p>
-                    <button class="example-btn" onclick="sendExample('How many products are in each category?')">
-                        How many products are in each category?
+                    <p><strong>Prueba preguntando:</strong></p>
+                    <button class="example-btn" onclick="sendExample('¿Cuántos productos hay en cada categoría?')">
+                        ¿Cuántos productos hay en cada categoría?
                     </button>
-                    <button class="example-btn" onclick="sendExample('Show me the details of the top category')">
-                        Show me the details of the top category
-                    </button>
-                    <button class="example-btn" onclick="sendExample('How many were there in the previous query?')">
-                        How many were there in the previous query?
+                    <button class="example-btn" onclick="sendExample('¿Cuántos había en la consulta anterior?')">
+                        ¿Cuántos había en la consulta anterior?
                     </button>
                 </div>
             </div>
         `;
     } catch (error) {
-        alert('Failed to clear history');
+        alert('Error al borrar el historial');
         console.error('Error:', error);
     }
 }
