@@ -59,17 +59,17 @@ This schema shows all available tables and their columns. Use ONLY these tables 
         """
         self.call_count += 1
         print(f"\n[Tool] generate_sql_query called (call #{self.call_count})")
-        print(f"[Tool] Question: {question[:100]}...")
-        
-        return f"""Please generate a SQL SELECT query for this question: "{question}"
+        print(f"[Tool] Question: {question}")
+    
+        return f"""Por favor genera una consulta SQL SELECT para esta pregunta: "{question}"
 
-Use the schema provided above. Generate ONLY the SQL query in a code block, like:
+        Usa el esquema proporcionado arriba. Genera ÚNICAMENTE la consulta SQL dentro de un bloque de código, como:
 
-```sql
-SELECT ...
-FROM ...
-WHERE ...
-```"""
+        ```sql
+        SELECT ...
+        FROM ...
+        WHERE ...
+        ```"""
     
     def execute_sql_query(
         self,
@@ -100,14 +100,14 @@ WHERE ...
                 # Extract search term from query for fuzzy matching hint
                 search_hint = self._extract_search_term(sql_query)
                 
-                return f"""✓ Query executed successfully but returned 0 rows.
+                return f"""✓ La consulta se ejecutó correctamente pero no devolvió filas.
 
-⚠️ No exact matches found. This might mean:
-- The search term doesn't match exactly (try fuzzy_search)
-- The record doesn't exist
-- There might be a typo in the search term
+                ⚠️ No se encontraron coincidencias exactas. Esto puede significar:
+                - El término de búsqueda no coincide exactamente (intenta usar fuzzy_search)
+                - El registro no existe
+                - Puede haber un error tipográfico en el término de búsqueda
 
-{f"💡 Hint: You might want to call fuzzy_search() to find similar values for '{search_hint}'" if search_hint else ""}"""
+                {f"💡 Sugerencia: podrías llamar a fuzzy_search() para encontrar valores similares a '{search_hint}'" if search_hint else ""}"""
 
             # Convert to DataFrame
             df = pd.DataFrame(results)
@@ -116,7 +116,8 @@ WHERE ...
             self.last_query = sql_query
             self.last_df = df
             self.last_fuzzy_matches = None  # Clear fuzzy matches on successful query
-
+            print("DEBUG df.dtypes:\n", df.dtypes)
+            print("DEBUG sample values:\n", df.head(5).to_dict('records'))
             # Pretty display (console)
             print("\n📊 Query Results:\n")
             print(df.to_markdown(index=False))
@@ -132,83 +133,6 @@ WHERE ...
 
         except Exception as e:
             return f"❌ Error executing query: {str(e)}"
-    
-    def fuzzy_search(
-        self,
-        search_term: Annotated[str, Field(description="The term to search for using fuzzy matching")],
-        table_name: Annotated[str, Field(description="The table name to search in (e.g., 'dbo.Products')")],
-        column_name: Annotated[str, Field(description="The column name to search in (e.g., 'ProductName')")]
-    ) -> str:
-        """
-        Perform fuzzy search using SQL LIKE operator to find similar values.
-        Use this when exact matches return no results.
-        Returns a list of similar matches for the user to choose from.
-        """
-        self.call_count += 1
-        print(f"\n[Tool] fuzzy_search called (call #{self.call_count})")
-        print(f"[Tool] Searching for: '{search_term}' in {table_name}.{column_name}")
-        
-        try:
-            # Clean inputs
-            search_term = search_term.strip()
-            table_name = table_name.strip()
-            column_name = column_name.strip()
-            
-            # Escape single quotes in search term
-            search_term_escaped = search_term.replace("'", "''")
-            
-            # Build fuzzy search query with multiple patterns
-            fuzzy_query = f"""
-            SELECT DISTINCT TOP 20
-                {column_name}
-            FROM {table_name}
-            WHERE 
-                {column_name} LIKE '%{search_term_escaped}%'
-                OR {column_name} LIKE '%{search_term_escaped.lower()}%'
-                OR {column_name} LIKE '%{search_term_escaped.upper()}%'
-                OR {column_name} LIKE '%{search_term_escaped.capitalize()}%'
-            ORDER BY 
-                CASE 
-                    WHEN {column_name} = '{search_term_escaped}' THEN 0
-                    WHEN {column_name} LIKE '{search_term_escaped}%' THEN 1
-                    WHEN {column_name} LIKE '%{search_term_escaped}' THEN 2
-                    ELSE 3
-                END,
-                {column_name}
-            """
-            
-            print(f"[Tool] Fuzzy query: {fuzzy_query}...")
-            
-            # Execute fuzzy search
-            results = self.db_manager.execute_query(fuzzy_query)
-            
-            if not results:
-                return f"❌ No similar matches found for '{search_term}' in {table_name}.{column_name}"
-            
-            # Format results as a numbered list
-            matches = []
-            for idx, row in enumerate(results, 1):
-                value = row.get(column_name, "")
-                matches.append({
-                    'number': idx,
-                    'value': value,
-                    'column': column_name
-                })
-            
-            # Store fuzzy matches
-            self.last_fuzzy_matches = matches
-            
-            # Create readable response
-            response = f"🔍 Found {len(matches)} similar matches for '{search_term}':\n\n"
-            for match in matches:
-                response += f"{match['number']}. {match['value']}\n"
-            
-            response += f"\n💡 Please tell me which number or name you're referring to, and I'll retrieve the details."
-            
-            return response
-            
-        except Exception as e:
-            return f"❌ Error in fuzzy search: {str(e)}"
     
     def search_across_tables(
         self,
@@ -280,8 +204,6 @@ WHERE ...
                 for match in matches[:3]:  # Limit to 3 per table
                     response += f"  - {match['column']}: {match['value']}\n"
                 response += "\n"
-            
-            response += f"💡 Use fuzzy_search() on a specific table and column for more results."
             
             return response
             
